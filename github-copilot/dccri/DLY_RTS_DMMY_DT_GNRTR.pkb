@@ -2,6 +2,19 @@
 
 CREATE OR REPLACE PACKAGE BODY DLY_RTS_DMMY_DT_GNRTR AS
 
+-- This function returns a random currency record that is enabled and for which the current date falls between start date active and end date active
+-- if the start date active is null, it should be converted to current date -1
+-- if the end date active is null, it should be converted to current date
+
+function get_random_currency return varchar2 is
+  v_random_number number;
+  v_currency varchar2(3);
+begin
+  select trunc(dbms_random.value(1,40)) into v_random_number from dual;
+  select cur.currency_code into v_currency from (select currency_code, start_date_active, end_date_active from fnd_currencies where trunc(sysdate) between nvl(start_date_active, sysdate - 1) and nvl(end_date_active, sysdate) and enabled_flag = 'Y' and rownum = v_random_number) cur;
+  return v_currency;
+end get_random_currency;
+
 -- This procedure selects USER_ID of user OPERATIONS. It also selects RESPONSIBILITY_ID and APPLICATION_ID for responsibility 'Application Developer'. 
 -- It uses selected values to execute fnd_global.APPS_INITIALIZE.
 
@@ -74,7 +87,7 @@ BEGIN
     v_record_id := XXGL_DAILY_RATES_INTF_STG_S.NEXTVAL;
     
     INSERT INTO XXGL_DAILY_RATES_INTF_STG
-    (FROM_CONVERSION_DATE, TO_CONVERSION_DATE, FROM_CURRENCY, TO_CURRENCY, MODE_FLAG, CONVERSION_TYPE, CONVERSION_RATE, CREATION_DATE, CREATED_BY, LAST_UPDATE_DATE, LAST_UPDATED_BY, LAST_UPDATE_LOGIN, REQUEST_ID, FILE_NAME, LOAD_DATE, RECORD_ID)
+    (FROM_CONVERSION_DATE, TO_CONVERSION_DATE, FROM_CURRENCY, TO_CURRENCY, MODE_FLAG, USER_CONVERSION_TYPE, CONVERSION_RATE, CREATION_DATE, CREATED_BY, LAST_UPDATE_DATE, LAST_UPDATED_BY, LAST_UPDATE_LOGIN, REQUEST_ID, FILE_NAME, LOAD_DATE, RECORD_ID)
     VALUES
     (v_from_conversion_date, v_to_conversion_date, v_from_currency, v_to_currency, v_mode_flag, v_conversion_type, v_conversion_rate, v_creation_date, v_created_by, v_last_update_date, v_last_updated_by, v_last_update_login, v_request_id, v_file_name, v_load_date, v_record_id);
     
@@ -86,17 +99,51 @@ BEGIN
 -- Only 100 records should be inserted into XXGL_DAILY_RATES_INTF_STG table at a time.
 
 PROCEDURE INSERT_DUMMY_RECORDS IS
-  v_from_currency VARCHAR2(3);
-  v_to_currency VARCHAR2(3);
-  v_file_name VARCHAR2(100);
+
+-- Varaible to store file name
+v_file_name VARCHAR2(100);
+
+-- Variable to store number of records inserted
+v_count NUMBER := 0;
+
+-- Variable to store from currency
+v_from_currency VARCHAR2(3);
+
+-- Variable to store to currency
+v_to_currency VARCHAR2(3);
+
+-- Varaible to store a random number
+v_random_number NUMBER;
+
 BEGIN
-    FOR i IN (SELECT currency_code FROM fnd_currencies WHERE enabled_flag = 'Y') LOOP
-        v_from_currency := i.currency_code;
-        v_to_currency := i.currency_code;
-        v_file_name := 'DUMMY';
-        INSERT_DUMMY_RECORD(v_from_currency, v_to_currency, v_file_name);
-    END LOOP;
+  dbms_output.put_line('Inside INSERT_DUMMY_RECORDS');
+
+-- This loop runs 100 times and calls insert_into_daily_rates_intf_stg procedure
+
+FOR i IN 1..100 LOOP
+
+dbms_output.put_line('Inside LOOP');
+
+-- get a random currency using get_random_currency function and store it in v_from_currency
+v_from_currency := get_random_currency;
+
+-- get a random currency using get_random_currency function and store it in v_to_currency
+v_to_currency := get_random_currency;
+
+dbms_output.put_line('v_from_currency: ' || v_from_currency || ' v_to_currency: ' || v_to_currency);
+
+-- if the from currency and to currency are not the same, call insert_into_daily_rates_intf_stg procedure
+
+IF v_from_currency != v_to_currency THEN
+    v_file_name := 'DUMMY_FILE_NAME';
+    INSERT_DUMMY_RECORD(v_from_currency, v_to_currency, v_file_name);
+    v_count := v_count + 1;
+END IF;
+
+END LOOP;
+
 END INSERT_DUMMY_RECORDS;
+  
 
 -- This method called "main" will first call APPS_INITIALIZE method, followed by insert_into_daily_rates_intf_stg method.
 
