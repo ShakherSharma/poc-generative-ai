@@ -10,8 +10,29 @@ function get_random_currency return varchar2 is
   v_random_number number;
   v_currency varchar2(3);
 begin
-  select trunc(dbms_random.value(1,40)) into v_random_number from dual;
-  select cur.currency_code into v_currency from (select currency_code, start_date_active, end_date_active from fnd_currencies where trunc(sysdate) between nvl(start_date_active, sysdate - 1) and nvl(end_date_active, sysdate) and enabled_flag = 'Y' and rownum = v_random_number) cur;
+
+select trunc(dbms_random.value(1,40)) into v_random_number from dual;
+
+SELECT
+    cur.currency_code
+INTO v_currency
+FROM
+    (
+        SELECT
+            currency_code,
+            start_date_active,
+            end_date_active,
+            rownum as record_number
+        FROM
+            fnd_currencies
+        WHERE
+            trunc(sysdate) BETWEEN nvl(start_date_active, sysdate - 1) AND nvl(end_date_active, sysdate)
+            AND enabled_flag = 'Y'
+            AND length(currency_code) = 3
+    ) cur
+  WHERE
+    record_number = v_random_number;
+  
   return v_currency;
 end get_random_currency;
 
@@ -104,7 +125,7 @@ PROCEDURE INSERT_DUMMY_RECORDS IS
 v_file_name VARCHAR2(100);
 
 -- Variable to store number of records inserted
-v_count NUMBER := 0;
+v_count NUMBER := 1;
 
 -- Variable to store from currency
 v_from_currency VARCHAR2(3);
@@ -115,31 +136,16 @@ v_to_currency VARCHAR2(3);
 -- Varaible to store a random number
 v_random_number NUMBER;
 
+
 BEGIN
-  dbms_output.put_line('Inside INSERT_DUMMY_RECORDS');
 
--- This loop runs 100 times and calls insert_into_daily_rates_intf_stg procedure
-
-FOR i IN 1..100 LOOP
-
-dbms_output.put_line('Inside LOOP');
-
--- get a random currency using get_random_currency function and store it in v_from_currency
-v_from_currency := get_random_currency;
-
--- get a random currency using get_random_currency function and store it in v_to_currency
-v_to_currency := get_random_currency;
-
-dbms_output.put_line('v_from_currency: ' || v_from_currency || ' v_to_currency: ' || v_to_currency);
-
--- if the from currency and to currency are not the same, call insert_into_daily_rates_intf_stg procedure
-
-IF v_from_currency != v_to_currency THEN
-    v_file_name := 'DUMMY_FILE_NAME';
-    INSERT_DUMMY_RECORD(v_from_currency, v_to_currency, v_file_name);
+WHILE v_count <= 100 LOOP
+  v_from_currency := get_random_currency;
+  v_to_currency := get_random_currency;
+  IF v_from_currency <> v_to_currency THEN
+    insert_dummy_record(v_from_currency, v_to_currency, 'DUMMY_FILE');
     v_count := v_count + 1;
-END IF;
-
+  END IF;
 END LOOP;
 
 END INSERT_DUMMY_RECORDS;
@@ -147,10 +153,11 @@ END INSERT_DUMMY_RECORDS;
 
 -- This method called "main" will first call APPS_INITIALIZE method, followed by insert_into_daily_rates_intf_stg method.
 
-PROCEDURE main IS
+PROCEDURE main_method IS
 BEGIN
+    -- print calling APPS_INITIALIZE
     APPS_INITIALIZE;
     INSERT_DUMMY_RECORDS;
-END main;
+END main_method;
 
 END DLY_RTS_DMMY_DT_GNRTR;
